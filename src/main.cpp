@@ -5,9 +5,25 @@
 int main() {
     std::unordered_map<std::string, std::string> db;
 
-    db["name"] = "Sharvil";
+    std::string command, key, value;
 
-    std::cout << "name = " << db["name"] << std::endl;
+    while (std::cin >> command) {
+        if (command == "SET") {
+            std::cin >> key >> value;
+            db[key] = value;
+            std::cout << "OK\n";
+        }
+        else if (command == "GET") {
+            std::cin >> key;
+
+            if (db.count(key))
+                std::cout << db[key] << "\n";
+            else
+                std::cout << "(nil)\n";
+        }
+
+        std::cout << "DartDB> ";
+    }
 
     return 0;
 }
