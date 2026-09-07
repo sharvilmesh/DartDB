@@ -18,6 +18,11 @@ int main() {
 
             if (db.count(key))
                 std::cout << db[key] << "\n";
+                else if (command == "DEL") {
+                    std::cin >> key;
+                    db.erase(key);
+                    std::cout << "OK\n";
+                }
             else
                 std::cout << "(nil)\n";
         }
