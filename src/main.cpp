@@ -12,7 +12,11 @@ int main() {
     while (std::cin >> command) {
 
         if (command == "SET") {
-            std::cin >> key >> value;
+            if (!(std::cin >> key >> value)) {
+                std::cout << "Error: SET requires key and value\n";
+                break;
+            }
+
             db[key] = value;
             std::cout << "OK\n";
         }
