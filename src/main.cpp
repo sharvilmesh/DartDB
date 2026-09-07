@@ -7,6 +7,8 @@ int main() {
 
     std::string command, key, value;
 
+    std::cout << "DartDB> ";
+
     while (std::cin >> command) {
 
         if (command == "SET") {
@@ -37,6 +39,10 @@ int main() {
                 std::cout << "YES\n";
             else
                 std::cout << "NO\n";
+        }
+
+        else {
+            std::cout << "Unknown command\n";
         }
 
         std::cout << "DartDB> ";
