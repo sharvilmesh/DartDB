@@ -6,7 +6,6 @@
 
 int main() {
 
-    // Start Winsock
     WSADATA wsaData;
 
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -14,7 +13,6 @@ int main() {
         return 1;
     }
 
-    // Create TCP socket
     SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
 
     if (clientSocket == INVALID_SOCKET) {
@@ -23,14 +21,12 @@ int main() {
         return 1;
     }
 
-    // Server address
     sockaddr_in serverAddress{};
 
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
     serverAddress.sin_port = htons(6379);
 
-    // Connect to DartDB server
     if (connect(
         clientSocket,
         (sockaddr*)&serverAddress,
@@ -44,6 +40,35 @@ int main() {
     }
 
     std::cout << "Connected to DartDB server!\n";
+
+    std::string command = "SET name Sharvil";
+
+    send(
+        clientSocket,
+        command.c_str(),
+        command.length(),
+        0
+    );
+
+    std::cout << "Sent: " << command << "\n";
+
+    char buffer[1024];
+
+    int bytesReceived = recv(
+        clientSocket,
+        buffer,
+        sizeof(buffer) - 1,
+        0
+    );
+
+    if (bytesReceived > 0) {
+
+        buffer[bytesReceived] = '\0';
+
+        std::cout << "Server response: "
+                  << buffer
+                  << "\n";
+    }
 
     closesocket(clientSocket);
     WSACleanup();

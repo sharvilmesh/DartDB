@@ -1,11 +1,15 @@
 #include <iostream>
 #include <winsock2.h>
+#include <string>
+#include <unordered_map>
+#include <sstream>
 
 #pragma comment(lib, "ws2_32.lib")
 
 int main() {
 
-    // Start Winsock
+    std::unordered_map<std::string, std::string> db;
+
     WSADATA wsaData;
 
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -13,9 +17,6 @@ int main() {
         return 1;
     }
 
-    std::cout << "Winsock initialized successfully\n";
-
-    // Create a TCP socket
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
 
     if (serverSocket == INVALID_SOCKET) {
@@ -24,16 +25,12 @@ int main() {
         return 1;
     }
 
-    std::cout << "TCP socket created successfully\n";
-
-    // Configure server address
     sockaddr_in serverAddress{};
 
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = INADDR_ANY;
     serverAddress.sin_port = htons(6379);
 
-    // Bind socket to port 6379
     if (bind(
         serverSocket,
         (sockaddr*)&serverAddress,
@@ -46,9 +43,6 @@ int main() {
         return 1;
     }
 
-    std::cout << "Server bound to port 6379\n";
-
-    // Start listening
     if (listen(serverSocket, 5) == SOCKET_ERROR) {
 
         std::cout << "Listen failed\n";
@@ -59,7 +53,6 @@ int main() {
 
     std::cout << "DartDB server is listening on port 6379...\n";
 
-    // Wait for a client
     SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
 
     if (clientSocket == INVALID_SOCKET) {
@@ -71,8 +64,66 @@ int main() {
 
     std::cout << "Client connected!\n";
 
+    char buffer[1024];
+
+    int bytesReceived = recv(
+        clientSocket,
+        buffer,
+        sizeof(buffer) - 1,
+        0
+    );
+
+    if (bytesReceived > 0) {
+
+        buffer[bytesReceived] = '\0';
+
+        std::string request(buffer);
+
+        std::cout << "Received: " << request << "\n";
+
+        std::stringstream ss(request);
+
+        std::string command;
+        std::string key;
+        std::string value;
+
+        ss >> command >> key >> value;
+
+        if (command == "SET") {
+
+            db[key] = value;
+
+            std::cout << "Stored: "
+                      << key
+                      << " = "
+                      << value
+                      << "\n";
+
+            std::string response = "OK";
+
+            send(
+                clientSocket,
+                response.c_str(),
+                response.length(),
+                0
+            );
+        }
+
+        else {
+            std::string response = "Unknown command";
+
+            send(
+                clientSocket,
+                response.c_str(),
+                response.length(),
+                0
+            );
+        }
+    }
+
     closesocket(clientSocket);
     closesocket(serverSocket);
+
     WSACleanup();
 
     return 0;
