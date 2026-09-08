@@ -41,16 +41,19 @@ int main() {
 
     std::cout << "Connected to DartDB server!\n";
 
-    std::string command = "SET name Sharvil";
+    std::string command;
 
-    send(
-        clientSocket,
-        command.c_str(),
-        command.length(),
-        0
-    );
+std::cout << "DartDB> ";
+std::getline(std::cin, command);
 
-    std::cout << "Sent: " << command << "\n";
+send(
+    clientSocket,
+    command.c_str(),
+    command.length(),
+    0
+);
+
+std::cout << "Sent: " << command << "\n";
 
     char buffer[1024];
 
