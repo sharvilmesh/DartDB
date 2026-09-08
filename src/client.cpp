@@ -41,36 +41,45 @@ int main() {
 
     std::cout << "Connected to DartDB server!\n";
 
-    std::string command;
+    while (true) {
 
-std::cout << "DartDB> ";
-std::getline(std::cin, command);
+        std::string command;
 
-send(
-    clientSocket,
-    command.c_str(),
-    command.length(),
-    0
-);
+        std::cout << "DartDB> ";
+        std::getline(std::cin, command);
 
-std::cout << "Sent: " << command << "\n";
+        if (command == "EXIT") {
+            break;
+        }
 
-    char buffer[1024];
+        if (command.empty()) {
+            continue;
+        }
 
-    int bytesReceived = recv(
-        clientSocket,
-        buffer,
-        sizeof(buffer) - 1,
-        0
-    );
+        send(
+            clientSocket,
+            command.c_str(),
+            command.length(),
+            0
+        );
 
-    if (bytesReceived > 0) {
+        char buffer[1024];
+
+        int bytesReceived = recv(
+            clientSocket,
+            buffer,
+            sizeof(buffer) - 1,
+            0
+        );
+
+        if (bytesReceived <= 0) {
+            std::cout << "Server disconnected.\n";
+            break;
+        }
 
         buffer[bytesReceived] = '\0';
 
-        std::cout << "Server response: "
-                  << buffer
-                  << "\n";
+        std::cout << buffer << "\n";
     }
 
     closesocket(clientSocket);

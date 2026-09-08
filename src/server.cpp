@@ -100,6 +100,19 @@ int main() {
 
         if (command == "SET") {
 
+            if (key.empty() || value.empty()) {
+                std::string response = "ERROR: SET requires key and value";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+
+                continue;
+            }
+
             db[key] = value;
 
             std::cout << "Stored: "
@@ -116,6 +129,126 @@ int main() {
                 response.length(),
                 0
             );
+        }
+
+        else if (command == "GET") {
+
+            if (key.empty()) {
+                std::string response = "ERROR: GET requires a key";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+
+                continue;
+            }
+
+            if (db.count(key)) {
+
+                std::string response = db[key];
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+            }
+
+            else {
+
+                std::string response = "(nil)";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+            }
+        }
+
+        else if (command == "DEL") {
+
+            if (key.empty()) {
+                std::string response = "ERROR: DEL requires a key";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+
+                continue;
+            }
+
+            if (db.erase(key)) {
+
+                std::string response = "OK";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+            }
+
+            else {
+
+                std::string response = "(nil)";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+            }
+        }
+
+        else if (command == "EXISTS") {
+
+            if (key.empty()) {
+                std::string response = "ERROR: EXISTS requires a key";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+
+                continue;
+            }
+
+            if (db.count(key)) {
+
+                std::string response = "YES";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+            }
+
+            else {
+
+                std::string response = "NO";
+
+                send(
+                    clientSocket,
+                    response.c_str(),
+                    response.length(),
+                    0
+                );
+            }
         }
 
         else {
