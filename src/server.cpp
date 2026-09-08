@@ -53,7 +53,11 @@ int main() {
 
     std::cout << "DartDB server is listening on port 6379...\n";
 
-    SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
+    SOCKET clientSocket = accept(
+        serverSocket,
+        nullptr,
+        nullptr
+    );
 
     if (clientSocket == INVALID_SOCKET) {
         std::cout << "Client connection failed\n";
@@ -66,14 +70,19 @@ int main() {
 
     char buffer[1024];
 
-    int bytesReceived = recv(
-        clientSocket,
-        buffer,
-        sizeof(buffer) - 1,
-        0
-    );
+    while (true) {
 
-    if (bytesReceived > 0) {
+        int bytesReceived = recv(
+            clientSocket,
+            buffer,
+            sizeof(buffer) - 1,
+            0
+        );
+
+        if (bytesReceived <= 0) {
+            std::cout << "Client disconnected.\n";
+            break;
+        }
 
         buffer[bytesReceived] = '\0';
 
@@ -110,6 +119,7 @@ int main() {
         }
 
         else {
+
             std::string response = "Unknown command";
 
             send(
