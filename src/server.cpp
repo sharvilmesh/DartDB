@@ -35,8 +35,16 @@ void loadDatabase()
     std::string key;
     std::string value;
 
-    while (file >> key >> value)
+    while (file >> key)
     {
+
+        std::getline(file, value);
+
+        if (!value.empty() && value[0] == ' ')
+        {
+            value.erase(0, 1);
+        }
+
         db[key] = value;
     }
 }
@@ -75,8 +83,12 @@ void handleClient(SOCKET clientSocket)
         std::string key;
         std::string value;
 
-        ss >> command >> key >> value;
-
+        ss >> command >> key;
+        std::getline(ss, value);
+        if (!value.empty() && value[0] == ' ')
+        {
+            value.erase(0, 1);
+        }
         std::string response;
 
         if (command == "SET")
