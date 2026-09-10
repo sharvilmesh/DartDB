@@ -3,12 +3,143 @@
 #include <string>
 #include <unordered_map>
 #include <sstream>
+#include <thread>
+#include <mutex>
 
 #pragma comment(lib, "ws2_32.lib")
 
-int main() {
+std::unordered_map<std::string, std::string> db;
+std::mutex dbMutex;
 
-    std::unordered_map<std::string, std::string> db;
+void handleClient(SOCKET clientSocket) {
+
+    std::cout << "Client connected!\n";
+
+    char buffer[1024];
+
+    while (true) {
+
+        int bytesReceived = recv(
+            clientSocket,
+            buffer,
+            sizeof(buffer) - 1,
+            0
+        );
+
+        if (bytesReceived <= 0) {
+            std::cout << "Client disconnected.\n";
+            break;
+        }
+
+        buffer[bytesReceived] = '\0';
+
+        std::string request(buffer);
+
+        std::cout << "Received: " << request << "\n";
+
+        std::stringstream ss(request);
+
+        std::string command;
+        std::string key;
+        std::string value;
+
+        ss >> command >> key >> value;
+
+        std::string response;
+
+        if (command == "SET") {
+
+            if (key.empty() || value.empty()) {
+                response = "ERROR: SET requires key and value";
+            }
+            else {
+
+                {
+                    std::lock_guard<std::mutex> lock(dbMutex);
+
+                    db[key] = value;
+                }
+
+                std::cout << "Stored: "
+                          << key
+                          << " = "
+                          << value
+                          << "\n";
+
+                response = "OK";
+            }
+        }
+
+        else if (command == "GET") {
+
+            if (key.empty()) {
+                response = "ERROR: GET requires a key";
+            }
+            else {
+
+                std::lock_guard<std::mutex> lock(dbMutex);
+
+                if (db.count(key)) {
+                    response = db[key];
+                }
+                else {
+                    response = "(nil)";
+                }
+            }
+        }
+
+        else if (command == "DEL") {
+
+            if (key.empty()) {
+                response = "ERROR: DEL requires a key";
+            }
+            else {
+
+                std::lock_guard<std::mutex> lock(dbMutex);
+
+                if (db.erase(key)) {
+                    response = "OK";
+                }
+                else {
+                    response = "(nil)";
+                }
+            }
+        }
+
+        else if (command == "EXISTS") {
+
+            if (key.empty()) {
+                response = "ERROR: EXISTS requires a key";
+            }
+            else {
+
+                std::lock_guard<std::mutex> lock(dbMutex);
+
+                if (db.count(key)) {
+                    response = "YES";
+                }
+                else {
+                    response = "NO";
+                }
+            }
+        }
+
+        else {
+            response = "Unknown command";
+        }
+
+        send(
+            clientSocket,
+            response.c_str(),
+            response.length(),
+            0
+        );
+    }
+
+    closesocket(clientSocket);
+}
+
+int main() {
 
     WSADATA wsaData;
 
@@ -43,7 +174,7 @@ int main() {
         return 1;
     }
 
-    if (listen(serverSocket, 5) == SOCKET_ERROR) {
+    if (listen(serverSocket, 10) == SOCKET_ERROR) {
 
         std::cout << "Listen failed\n";
         closesocket(serverSocket);
@@ -53,218 +184,27 @@ int main() {
 
     std::cout << "DartDB server is listening on port 6379...\n";
 
-    SOCKET clientSocket = accept(
-        serverSocket,
-        nullptr,
-        nullptr
-    );
-
-    if (clientSocket == INVALID_SOCKET) {
-        std::cout << "Client connection failed\n";
-        closesocket(serverSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    std::cout << "Client connected!\n";
-
-    char buffer[1024];
-
     while (true) {
 
-        int bytesReceived = recv(
-            clientSocket,
-            buffer,
-            sizeof(buffer) - 1,
-            0
+        SOCKET clientSocket = accept(
+            serverSocket,
+            nullptr,
+            nullptr
         );
 
-        if (bytesReceived <= 0) {
-            std::cout << "Client disconnected.\n";
-            break;
+        if (clientSocket == INVALID_SOCKET) {
+            std::cout << "Client connection failed\n";
+            continue;
         }
 
-        buffer[bytesReceived] = '\0';
+        std::thread clientThread(
+            handleClient,
+            clientSocket
+        );
 
-        std::string request(buffer);
-
-        std::cout << "Received: " << request << "\n";
-
-        std::stringstream ss(request);
-
-        std::string command;
-        std::string key;
-        std::string value;
-
-        ss >> command >> key >> value;
-
-        if (command == "SET") {
-
-            if (key.empty() || value.empty()) {
-                std::string response = "ERROR: SET requires key and value";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-
-                continue;
-            }
-
-            db[key] = value;
-
-            std::cout << "Stored: "
-                      << key
-                      << " = "
-                      << value
-                      << "\n";
-
-            std::string response = "OK";
-
-            send(
-                clientSocket,
-                response.c_str(),
-                response.length(),
-                0
-            );
-        }
-
-        else if (command == "GET") {
-
-            if (key.empty()) {
-                std::string response = "ERROR: GET requires a key";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-
-                continue;
-            }
-
-            if (db.count(key)) {
-
-                std::string response = db[key];
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-            }
-
-            else {
-
-                std::string response = "(nil)";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-            }
-        }
-
-        else if (command == "DEL") {
-
-            if (key.empty()) {
-                std::string response = "ERROR: DEL requires a key";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-
-                continue;
-            }
-
-            if (db.erase(key)) {
-
-                std::string response = "OK";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-            }
-
-            else {
-
-                std::string response = "(nil)";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-            }
-        }
-
-        else if (command == "EXISTS") {
-
-            if (key.empty()) {
-                std::string response = "ERROR: EXISTS requires a key";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-
-                continue;
-            }
-
-            if (db.count(key)) {
-
-                std::string response = "YES";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-            }
-
-            else {
-
-                std::string response = "NO";
-
-                send(
-                    clientSocket,
-                    response.c_str(),
-                    response.length(),
-                    0
-                );
-            }
-        }
-
-        else {
-
-            std::string response = "Unknown command";
-
-            send(
-                clientSocket,
-                response.c_str(),
-                response.length(),
-                0
-            );
-        }
+        clientThread.detach();
     }
 
-    closesocket(clientSocket);
     closesocket(serverSocket);
 
     WSACleanup();
