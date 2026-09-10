@@ -12,61 +12,101 @@
 std::unordered_map<std::string, std::string> db;
 std::mutex dbMutex;
 
-void saveDatabase()
-{
 
-    std::lock_guard<std::mutex> lock(dbMutex);
+// Append a database operation to the log file.
+// This function is called while dbMutex is already locked.
+void appendLog(const std::string& command) {
 
-    std::ofstream file("dartdb.db");
+    std::ofstream file("dartdb.log", std::ios::app);
 
-    for (const auto &pair : db)
-    {
-        file << pair.first << " " << pair.second << "\n";
+    if (file.is_open()) {
+        file << command << "\n";
     }
 }
 
-void loadDatabase()
-{
+
+// Load the database when the server starts.
+void loadDatabase() {
 
     std::lock_guard<std::mutex> lock(dbMutex);
 
-    std::ifstream file("dartdb.db");
+    // Load existing snapshot
+    std::ifstream databaseFile("dartdb.db");
 
     std::string key;
     std::string value;
 
-    while (file >> key)
-    {
+    while (databaseFile >> key) {
 
-        std::getline(file, value);
+        std::getline(databaseFile, value);
 
-        if (!value.empty() && value[0] == ' ')
-        {
+        if (!value.empty() && value[0] == ' ') {
             value.erase(0, 1);
         }
 
         db[key] = value;
     }
+
+    databaseFile.close();
+
+
+    // Replay changes from the log
+    std::ifstream logFile("dartdb.log");
+
+    std::string command;
+
+    while (std::getline(logFile, command)) {
+
+        std::stringstream ss(command);
+
+        std::string operation;
+        std::string logKey;
+        std::string logValue;
+
+        ss >> operation;
+
+        if (operation == "SET") {
+
+            ss >> logKey;
+
+            std::getline(ss, logValue);
+
+            if (!logValue.empty() && logValue[0] == ' ') {
+                logValue.erase(0, 1);
+            }
+
+            db[logKey] = logValue;
+        }
+
+        else if (operation == "DEL") {
+
+            ss >> logKey;
+
+            db.erase(logKey);
+        }
+    }
+
+    logFile.close();
 }
 
-void handleClient(SOCKET clientSocket)
-{
+
+void handleClient(SOCKET clientSocket) {
 
     std::cout << "Client connected!\n";
 
     char buffer[1024];
 
-    while (true)
-    {
+    while (true) {
 
         int bytesReceived = recv(
             clientSocket,
             buffer,
             sizeof(buffer) - 1,
-            0);
+            0
+        );
 
-        if (bytesReceived <= 0)
-        {
+        if (bytesReceived <= 0) {
+
             std::cout << "Client disconnected.\n";
             break;
         }
@@ -84,207 +124,258 @@ void handleClient(SOCKET clientSocket)
         std::string value;
 
         ss >> command >> key;
+
         std::getline(ss, value);
-        if (!value.empty() && value[0] == ' ')
-        {
+
+        if (!value.empty() && value[0] == ' ') {
             value.erase(0, 1);
         }
+
         std::string response;
 
-        if (command == "SET")
-        {
 
-            if (key.empty() || value.empty())
-            {
+        // SET
+        if (command == "SET") {
+
+            if (key.empty() || value.empty()) {
+
                 response = "ERROR: SET requires key and value";
             }
-            else
-            {
 
-                {
-                    std::lock_guard<std::mutex> lock(dbMutex);
+            else {
 
-                    db[key] = value;
-                }
+                std::lock_guard<std::mutex> lock(dbMutex);
 
-                saveDatabase();
+                db[key] = value;
+
+                appendLog(
+                    "SET " + key + " " + value
+                );
 
                 response = "OK";
             }
         }
 
-        else if (command == "GET")
-        {
 
-            if (key.empty())
-            {
+        // GET
+        else if (command == "GET") {
+
+            if (key.empty()) {
+
                 response = "ERROR: GET requires a key";
             }
-            else
-            {
+
+            else {
 
                 std::lock_guard<std::mutex> lock(dbMutex);
 
-                if (db.count(key))
-                {
+                if (db.count(key)) {
+
                     response = db[key];
                 }
-                else
-                {
+
+                else {
+
                     response = "(nil)";
                 }
             }
         }
 
-        else if (command == "DEL")
-        {
 
-            if (key.empty())
-            {
+        // DEL
+        else if (command == "DEL") {
+
+            if (key.empty()) {
+
                 response = "ERROR: DEL requires a key";
             }
-            else
-            {
 
-                {
-                    std::lock_guard<std::mutex> lock(dbMutex);
-
-                    if (db.erase(key))
-                    {
-                        response = "OK";
-                    }
-                    else
-                    {
-                        response = "(nil)";
-                    }
-                }
-
-                saveDatabase();
-            }
-        }
-
-        else if (command == "EXISTS")
-        {
-
-            if (key.empty())
-            {
-                response = "ERROR: EXISTS requires a key";
-            }
-            else
-            {
+            else {
 
                 std::lock_guard<std::mutex> lock(dbMutex);
 
-                if (db.count(key))
-                {
+                if (db.erase(key)) {
+
+                    appendLog(
+                        "DEL " + key
+                    );
+
+                    response = "OK";
+                }
+
+                else {
+
+                    response = "(nil)";
+                }
+            }
+        }
+
+
+        // EXISTS
+        else if (command == "EXISTS") {
+
+            if (key.empty()) {
+
+                response = "ERROR: EXISTS requires a key";
+            }
+
+            else {
+
+                std::lock_guard<std::mutex> lock(dbMutex);
+
+                if (db.count(key)) {
+
                     response = "YES";
                 }
-                else
-                {
+
+                else {
+
                     response = "NO";
                 }
             }
         }
-        else if (command == "PING")
-        {
+
+
+        // PING
+        else if (command == "PING") {
+
             response = "PONG";
         }
-        else if (command == "INFO")
-        {
+
+
+        // INFO
+        else if (command == "INFO") {
+
             response =
                 "DartDB Server\n"
                 "Port: 6379\n"
                 "Status: Running";
         }
 
-        else
-        {
+
+        // Unknown command
+        else {
+
             response = "Unknown command";
         }
+
 
         send(
             clientSocket,
             response.c_str(),
             response.length(),
-            0);
+            0
+        );
     }
 
     closesocket(clientSocket);
 }
 
-int main()
-{
+
+int main() {
 
     loadDatabase();
 
     std::cout << "DartDB database loaded.\n";
 
+
     WSADATA wsaData;
 
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-    {
+    if (WSAStartup(
+        MAKEWORD(2, 2),
+        &wsaData
+    ) != 0) {
+
         std::cout << "WSAStartup failed\n";
         return 1;
     }
 
-    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (serverSocket == INVALID_SOCKET)
-    {
+    SOCKET serverSocket = socket(
+        AF_INET,
+        SOCK_STREAM,
+        0
+    );
+
+    if (serverSocket == INVALID_SOCKET) {
+
         std::cout << "Socket creation failed\n";
+
         WSACleanup();
+
         return 1;
     }
+
 
     sockaddr_in serverAddress{};
 
     serverAddress.sin_family = AF_INET;
+
     serverAddress.sin_addr.s_addr = INADDR_ANY;
+
     serverAddress.sin_port = htons(6379);
 
+
     if (bind(
-            serverSocket,
-            (sockaddr *)&serverAddress,
-            sizeof(serverAddress)) == SOCKET_ERROR)
-    {
+        serverSocket,
+        (sockaddr*)&serverAddress,
+        sizeof(serverAddress)
+    ) == SOCKET_ERROR) {
 
         std::cout << "Bind failed\n";
+
         closesocket(serverSocket);
+
         WSACleanup();
+
         return 1;
     }
 
-    if (listen(serverSocket, 10) == SOCKET_ERROR)
-    {
+
+    if (listen(
+        serverSocket,
+        10
+    ) == SOCKET_ERROR) {
 
         std::cout << "Listen failed\n";
+
         closesocket(serverSocket);
+
         WSACleanup();
+
         return 1;
     }
 
-    std::cout << "DartDB server is listening on port 6379...\n";
 
-    while (true)
-    {
+    std::cout
+        << "DartDB server is listening on port 6379...\n";
+
+
+    while (true) {
 
         SOCKET clientSocket = accept(
             serverSocket,
             nullptr,
-            nullptr);
+            nullptr
+        );
 
-        if (clientSocket == INVALID_SOCKET)
-        {
-            std::cout << "Client connection failed\n";
+        if (clientSocket == INVALID_SOCKET) {
+
+            std::cout
+                << "Client connection failed\n";
+
             continue;
         }
 
+
         std::thread clientThread(
             handleClient,
-            clientSocket);
+            clientSocket
+        );
 
         clientThread.detach();
     }
+
 
     closesocket(serverSocket);
 
