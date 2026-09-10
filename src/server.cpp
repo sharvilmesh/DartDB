@@ -5,11 +5,37 @@
 #include <sstream>
 #include <thread>
 #include <mutex>
+#include <fstream>
 
 #pragma comment(lib, "ws2_32.lib")
 
 std::unordered_map<std::string, std::string> db;
 std::mutex dbMutex;
+
+void saveDatabase() {
+
+    std::lock_guard<std::mutex> lock(dbMutex);
+
+    std::ofstream file("dartdb.db");
+
+    for (const auto& pair : db) {
+        file << pair.first << " " << pair.second << "\n";
+    }
+}
+
+void loadDatabase() {
+
+    std::lock_guard<std::mutex> lock(dbMutex);
+
+    std::ifstream file("dartdb.db");
+
+    std::string key;
+    std::string value;
+
+    while (file >> key >> value) {
+        db[key] = value;
+    }
+}
 
 void handleClient(SOCKET clientSocket) {
 
@@ -60,11 +86,7 @@ void handleClient(SOCKET clientSocket) {
                     db[key] = value;
                 }
 
-                std::cout << "Stored: "
-                          << key
-                          << " = "
-                          << value
-                          << "\n";
+                saveDatabase();
 
                 response = "OK";
             }
@@ -95,14 +117,18 @@ void handleClient(SOCKET clientSocket) {
             }
             else {
 
-                std::lock_guard<std::mutex> lock(dbMutex);
+                {
+                    std::lock_guard<std::mutex> lock(dbMutex);
 
-                if (db.erase(key)) {
-                    response = "OK";
+                    if (db.erase(key)) {
+                        response = "OK";
+                    }
+                    else {
+                        response = "(nil)";
+                    }
                 }
-                else {
-                    response = "(nil)";
-                }
+
+                saveDatabase();
             }
         }
 
@@ -140,6 +166,10 @@ void handleClient(SOCKET clientSocket) {
 }
 
 int main() {
+
+    loadDatabase();
+
+    std::cout << "DartDB database loaded.\n";
 
     WSADATA wsaData;
 
