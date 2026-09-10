@@ -177,6 +177,13 @@ void handleClient(SOCKET clientSocket)
         {
             response = "PONG";
         }
+        else if (command == "INFO")
+        {
+            response =
+                "DartDB Server\n"
+                "Port: 6379\n"
+                "Status: Running";
+        }
 
         else
         {
